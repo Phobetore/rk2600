@@ -154,7 +154,7 @@ chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 echo "Démontage et finalisation..."
 umount "$ROOTFS_DIR"
 losetup -d "$LOOP_DEVICE"
-rmdir $MOUNT_DIR
+rmdir "$MOUNT_DIR"
 
 ########################################
 #         Démarrage de la VM           #
