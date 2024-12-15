@@ -92,37 +92,37 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 
 echo "Installation d'Alpine Linux minimal dans $ROOTFS_DIR..."
 
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    # Créer la structure de base
-    mkdir -p /my-rootfs/etc/apk
-    # Copier la liste des dépôts par défaut du conteneur vers /my-rootfs
-    cp /etc/apk/repositories /my-rootfs/etc/apk/repositories
-
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c '
     # Initialiser la base de données apk dans /my-rootfs
-    apk --no-cache --root /my-rootfs --initdb
+    apk --root /my-rootfs --initdb
 
-    # Mettre à jour l'index des paquets dans /my-rootfs
-    apk --root /my-rootfs update || {
-        echo 'Erreur lors de apk update dans /my-rootfs';
-        exit 1;
-    }
+    # Créer le répertoire des clés et copier les clés du conteneur
+    mkdir -p /my-rootfs/etc/apk
+    cp -r /etc/apk/keys /my-rootfs/etc/apk/
 
-    # Installer les paquets de base dans /my-rootfs
-    apk --root /my-rootfs --no-cache add alpine-base bash openrc util-linux sudo gcc make kmod grub-bios || {
-        echo 'Erreur lors de l’installation des paquets de base';
-        exit 1;
-    }
+    # Configurer le dépôt Alpine (vous pouvez adapter la version/stable)
+    echo "http://dl-cdn.alpinelinux.org/alpine/latest-stable/main" > /my-rootfs/etc/apk/repositories
+    echo "http://dl-cdn.alpinelinux.org/alpine/latest-stable/community" >> /my-rootfs/etc/apk/repositories
 
-    # Configuration utilisateur à l'intérieur de /my-rootfs
-    chroot /my-rootfs sh -c 'echo root:root | chpasswd'
-    echo 'alpine-rootkit' > /my-rootfs/etc/hostname
+    # Maintenant que les dépôts et les clés sont en place, installer busybox et autres paquets
+    apk --no-cache --root /my-rootfs add busybox bash openrc util-linux sudo gcc make kmod grub-bios
+
+    # Vérifier que /my-rootfs/bin/sh existe maintenant
+    if [ ! -x /my-rootfs/bin/sh ]; then
+        echo "/bin/sh absent après installation busybox."
+        exit 1
+    fi
+
+    # Configurer le système
+    echo "root:root" | chroot /my-rootfs chpasswd
+    echo "alpine-rootkit" > /my-rootfs/etc/hostname
     chroot /my-rootfs adduser -D user
-    echo 'user:user' | chroot /my-rootfs chpasswd
-    echo 'user    ALL=(ALL:ALL) ALL' >> /my-rootfs/etc/sudoers
+    echo "user:user" | chroot /my-rootfs chpasswd
+    echo "user    ALL=(ALL:ALL) ALL" >> /my-rootfs/etc/sudoers
 
     # Créer les répertoires nécessaires
-    for dir in dev proc run sys var; do mkdir -p /my-rootfs/\$dir; done
-"
+    for dir in dev proc run sys var; do mkdir -p /my-rootfs/$dir; done
+'
 
 # Préparation du chroot sur la machine hôte
 sudo chroot $ROOTFS_DIR /bin/sh -c "
