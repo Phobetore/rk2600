@@ -44,7 +44,7 @@ mount "${LOOP_DEVICE}p1" $MOUNT_DIR
 # Étape 5 : Installer Alpine Linux minimal
 echo "Installation d'Alpine Linux minimal dans l'image disque..."
 docker run -it --rm -v $MOUNT_DIR:/my-rootfs alpine sh -c '
-  apk add openrc util-linux build-base;
+  apk add busybox util-linux bash kmod openrc build-base;
   ln -s agetty /etc/init.d/agetty.ttyS0;
   echo ttyS0 > /etc/securetty;
   rc-update add agetty.ttyS0 default;
