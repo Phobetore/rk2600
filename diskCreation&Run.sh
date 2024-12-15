@@ -114,41 +114,30 @@ cp "$ROOTKIT_PATH" "$ROOTFS_DIR/home/user/rootkit.ko"
 chmod 700 "$ROOTFS_DIR/home/user/rootkit.ko"
 
 ########################################
-#       Configuration de GRUB et init  #
+#    Configuration de GRUB et init     #
 ########################################
 
-echo "Configuration de GRUB et init..."
-
-# Vérifier si /sbin/init existe, sinon créer le lien symbolique
-if [ ! -f "$ROOTFS_DIR/sbin/init" ]; then
-    echo "Le fichier /sbin/init est manquant. Création du lien symbolique..."
-    sudo ln -sf /bin/busybox "$ROOTFS_DIR/sbin/init"
-fi
-
-# Vérifier la présence de busybox
-if [ ! -f "$ROOTFS_DIR/bin/busybox" ]; then
-    echo "Busybox est manquant. Téléchargement et installation..."
-    sudo cp /usr/bin/busybox "$ROOTFS_DIR/bin/"
-    sudo chmod +x "$ROOTFS_DIR/bin/busybox"
-fi
-
-# Créer la configuration GRUB
-echo "Création de la configuration GRUB..."
-sudo mkdir -p "$ROOTFS_DIR/boot/grub"
-cat <<EOF | sudo tee "$ROOTFS_DIR/boot/grub/grub.cfg"
+echo "Configuration de GRUB..."
+mkdir -p "$ROOTFS_DIR/boot/grub"
+cat <<EOF > "$ROOTFS_DIR/boot/grub/grub.cfg"
 serial
 terminal_input serial
 terminal_output serial
 set root=(hd0,1)
-menuentry "Linux2600" {
-    linux /boot/vmlinuz root=/dev/sda1 console=ttyS0 rw init=/sbin/init
+menuentry "Rootkit Test Environment" {
+    linux /boot/vmlinuz root=/dev rw console=ttyS0 init=/sbin/init
 }
 EOF
 
-# Installer GRUB
-echo "Installation de GRUB..."
-sudo grub-install --directory=/usr/lib/grub/i386-pc --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
+grub-install --directory="$GRUB_DIR" --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
 
+echo "Ajout d'un script de démarrage pour le rootkit..."
+mkdir -p $ROOTFS_DIR/etc/local.d
+cat <<'EOF' > "$ROOTFS_DIR/etc/local.d/rootkit.start"
+#!/bin/sh
+insmod /home/user/rootkit.ko
+EOF
+chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 
 ########################################
 #          Nettoyage                   #
