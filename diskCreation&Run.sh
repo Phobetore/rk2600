@@ -125,7 +125,7 @@ terminal_input serial
 terminal_output serial
 set root=(hd0,1)
 menuentry "Rootkit Test Environment" {
-    linux /boot/vmlinuz root=/dev/sda rw console=ttyS0 init=/sbin/init
+    linux /boot/vmlinuz root=/dev/sda1 rw console=ttyS0 init=/sbin/init
 }
 EOF
 
@@ -146,6 +146,7 @@ chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 echo "Démontage et finalisation..."
 umount "$ROOTFS_DIR"
 losetup -d "$LOOP_DEVICE"
+rmdir "$ROOTFS_DIR"
 
 ########################################
 #         Démarrage de la VM           #
