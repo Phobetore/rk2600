@@ -80,11 +80,20 @@ docker run --rm -v "$ROOTFS_DIR:/my-rootfs" alpine:latest /bin/sh -c '
     echo "alpine-rootkit" > /etc/hostname;
     adduser -D user && echo "user:user" | chpasswd;
     echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers;
+
+    # Copie des fichiers nécessaires explicitement
+    cp -a /bin /my-rootfs/bin;
+    cp -a /sbin /my-rootfs/sbin;
+    cp -a /usr /my-rootfs/usr;
 '
 
-echo "Vérification de l'installation..."
+########################################
+# Vérification de `/bin/sh`
+########################################
+
+echo "Vérification de l'existence de /bin/sh..."
 if [ ! -f "$ROOTFS_DIR/bin/sh" ]; then
-    echo "Erreur: /bin/sh est manquant dans l'image disque." >&2
+    echo "Erreur: /bin/sh est toujours manquant dans l'image disque." >&2
     exit 1
 fi
 
