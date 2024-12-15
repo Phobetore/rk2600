@@ -92,26 +92,29 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 
 echo "Installation d'Alpine Linux minimal dans le chroot..."
 # Installation des paquets nécessaires directement dans le rootfs via Docker
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios build-base;
-    rc-update add agetty.ttyS0 default;
-    rc-update add root default;
-    echo 'root:root' | chpasswd;
-    echo 'alpine-rootkit' > /etc/hostname;
-    rc-update add devfs boot;
-    rc-update add procfs boot;
-    rc-update add sysfs boot;
-    adduser -D user && echo 'user:user' | chpasswd;
-    echo 'user    ALL=(ALL:ALL) ALL' >> /etc/sudoers;
-"
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c '
+  apk add openrc util-linux build-base;
+  ln -s agetty /etc/init.d/agetty.ttyS0;
+  echo ttyS0 > /etc/securetty;
+  rc-update add agetty.ttyS0 default;
+  rc-update add devfs boot;
+  rc-update add procfs boot;
+  rc-update add sysfs boot;
+  rc-update add root default;
 
-# Préparation du chroot
-sudo chroot $ROOTFS_DIR /bin/sh -c "
-    mkdir -p /proc /sys /dev /run &&
-    mount -t proc none /proc &&
-    mount -t sysfs none /sys &&
-    echo 'Configuration utilisateur terminée.'
-"
+  # Configurer le compte root
+  echo "root:root" | chpasswd;
+
+  # Ajouter un compte utilisateur standard
+  adduser -D user;
+  echo "user:user" | chpasswd;
+  echo "user    ALL=(ALL:ALL) ALL" >> /etc/sudoers;
+
+  # Copier les répertoires nécessaires
+  for d in bin etc lib root sbin usr; do tar c "/$d" | tar x -C /my-rootfs; done;
+  for dir in dev proc run sys var; do mkdir /my-rootfs/${dir}; done;
+'
+
 
 ########################################
 #           Configuration Noyau         #
