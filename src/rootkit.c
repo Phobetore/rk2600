@@ -6,8 +6,8 @@
 #include "netcom.h"
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Student");
-MODULE_DESCRIPTION("Educational Rootkit for Kernel 6+");
+MODULE_AUTHOR("Lain");
+MODULE_DESCRIPTION("Hidden Layer of the Wired");
 MODULE_VERSION("1.0");
 
 static int __init rootkit_init(void) {
