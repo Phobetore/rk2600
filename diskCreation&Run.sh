@@ -90,22 +90,39 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 #     Installation du système Alpine    #
 ########################################
 
-echo "Installation d'Alpine Linux minimal dans le chroot..."
-# Installation des paquets nécessaires directement dans le rootfs via Docker
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/ash -c "
+# Étape 1 : Configuration et installation des paquets dans l'environnement Docker
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
+    set -e
     apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios build-base;
+    ln -sf /bin/busybox /bin/sh; # Assure que /bin/sh est disponible
     echo 'root:root' | chpasswd;
     echo 'alpine-rootkit' > /etc/hostname;
     adduser -D user && echo 'user:user' | chpasswd;
     echo 'user    ALL=(ALL:ALL) ALL' >> /etc/sudoers;
+    
+    # Préparation des fichiers et répertoires nécessaires
+    for dir in dev proc run sys var; do mkdir -p /my-rootfs/\$dir; done;
+    for d in bin etc lib lib64 root sbin usr var; do tar c \"/\$d\" | tar x -C /my-rootfs; done;
 "
 
-# Préparation du chroot
-sudo chroot $ROOTFS_DIR /bin/ash -c "
-    mkdir -p /proc /sys /dev /run &&
-    mount -t proc none /proc &&
-    mount -t sysfs none /sys &&
-    echo 'Configuration utilisateur terminée.'
+echo "Installation terminée dans $ROOTFS_DIR."
+
+# Étape 2 : Préparation des montages nécessaires
+echo "Configuration des montages pour le chroot..."
+sudo mount -t proc none $ROOTFS_DIR/proc
+sudo mount -t sysfs none $ROOTFS_DIR/sys
+sudo mount --bind /dev $ROOTFS_DIR/dev
+sudo mount --bind /run $ROOTFS_DIR/run
+
+# Étape 3 : Chroot dans l'environnement Alpine
+echo "Entrée dans l'environnement chroot..."
+sudo chroot $ROOTFS_DIR /bin/sh -c "
+    set -e
+    echo 'Bienvenue dans le chroot Alpine !';
+    mkdir -p /proc /sys /dev /run;
+    mount -t proc none /proc;
+    mount -t sysfs none /sys;
+    echo 'Configuration utilisateur terminée.';
 "
 
 ########################################
@@ -133,7 +150,7 @@ sudo chmod 700 $ROOTFS_DIR/home/user/rootkit/rootkit.ko
 echo "Ajout du script d'exécution automatique du rootkit..."
 sudo mkdir -p $ROOTFS_DIR/etc/local.d
 cat <<'EOF' | sudo tee $ROOTFS_DIR/etc/local.d/run_rootkit.start
-#!/bin/ash
+#!/bin/sh
 echo "Insertion du rootkit compilé..."
 cd /home/user/rootkit
 insmod ./rootkit.ko
@@ -142,7 +159,7 @@ EOF
 sudo chmod +x $ROOTFS_DIR/etc/local.d/run_rootkit.start
 
 # Activer le service 'local' au démarrage
-sudo chroot $ROOTFS_DIR /bin/ash -c "
+sudo chroot $ROOTFS_DIR /bin/sh -c "
     rc-update add local default
 "
 
