@@ -2,12 +2,11 @@
 #define HOOKING_H
 
 #include <linux/ftrace.h>
-#include <linux/linkage.h>
 
 struct ftrace_hook {
     const char *name;
-    void *function;
-    void *original;
+    void *function;    // Fonction de remplacement
+    void *original;    // Pointeur vers l'adresse originale (à caster ensuite)
     unsigned long address;
     struct ftrace_ops ops;
 };
