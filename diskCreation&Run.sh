@@ -93,23 +93,29 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 echo "Installation d'Alpine Linux minimal dans $ROOTFS_DIR..."
 
 docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    # Mettre à jour l'index des paquets dans le système racine
-    apk --no-cache --root /my-rootfs --initdb add alpine-base || {
+    # Créer la structure de base
+    mkdir -p /my-rootfs/etc/apk
+    # Copier la liste des dépôts par défaut du conteneur vers /my-rootfs
+    cp /etc/apk/repositories /my-rootfs/etc/apk/repositories
+
+    # Initialiser la base de données apk dans /my-rootfs
+    apk --no-cache --root /my-rootfs --initdb
+
+    # Mettre à jour l'index des paquets dans /my-rootfs
+    apk --root /my-rootfs update || {
+        echo 'Erreur lors de apk update dans /my-rootfs';
+        exit 1;
+    }
+
+    # Installer les paquets de base dans /my-rootfs
+    apk --root /my-rootfs --no-cache add alpine-base bash openrc util-linux sudo gcc make kmod grub-bios || {
         echo 'Erreur lors de l’installation des paquets de base';
         exit 1;
     }
 
-    # Installer les paquets nécessaires
-    apk --no-cache --root /my-rootfs add bash openrc util-linux sudo gcc make kmod grub-bios || {
-        echo 'Erreur lors de l’installation des paquets supplémentaires';
-        exit 1;
-    }
-
-    # Configuration utilisateur
-    echo 'root:root' | chroot /my-rootfs chpasswd
+    # Configuration utilisateur à l'intérieur de /my-rootfs
+    chroot /my-rootfs sh -c 'echo root:root | chpasswd'
     echo 'alpine-rootkit' > /my-rootfs/etc/hostname
-
-    # Créer un utilisateur standard
     chroot /my-rootfs adduser -D user
     echo 'user:user' | chroot /my-rootfs chpasswd
     echo 'user    ALL=(ALL:ALL) ALL' >> /my-rootfs/etc/sudoers
