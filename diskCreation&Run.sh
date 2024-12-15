@@ -125,7 +125,7 @@ terminal_input serial
 terminal_output serial
 set root=(hd0,1)
 menuentry "Rootkit Test Environment" {
-    linux /boot/vmlinuz root=/dev rw console=ttyS0 init=/sbin/init
+    linux /boot/vmlinuz root=/dev/sda rw console=ttyS0 init=/sbin/init
 }
 EOF
 
