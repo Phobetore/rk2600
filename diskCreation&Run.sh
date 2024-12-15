@@ -137,7 +137,7 @@ EOF
 sudo chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 
 echo "Activation du service 'local' au démarrage..."
-sudo chroot "$ROOTFS_DIR" /bin/sh -c "rc-update add local default"
+sudo chroot "$ROOTFS_DIR" sh -c "rc-update add local default"
 
 
 ########################################
