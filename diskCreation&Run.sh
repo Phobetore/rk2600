@@ -1,173 +1,100 @@
 #!/bin/bash
-set -e
 
-########################################
-#           Vérifications préalables   #
-########################################
-
-# Vérifiez les permissions root
+# Vérifier les permissions root
 if [[ $EUID -ne 0 ]]; then
     echo "Ce script doit être exécuté en tant que root." >&2
     exit 1
 fi
 
-# Vérifiez la présence des outils nécessaires
-for cmd in parted losetup mkfs.ext4 docker qemu-system-x86_64 grub-install; do
-    if ! command -v $cmd >/dev/null 2>&1; then
-        echo "Erreur: L'outil '$cmd' n'est pas installé. Veuillez l'installer." >&2
-        exit 1
-    fi
-done
+# Vérifier que Docker est installé
+if ! command -v docker &> /dev/null; then
+    echo "Docker n'est pas installé. Veuillez l'installer avant d'exécuter ce script." >&2
+    exit 1
+fi
 
-########################################
-#            Variables                 #
-########################################
-
-DISK_IMG="2600MinAlpine.img"
-DISK_SIZE="2G"
-ROOTFS_DIR="/tmp/rootfs"
-KERNEL_PATH="../linux-6.12.3/arch/x86/boot/bzImage"
+# Variables
+DISK_IMG="disk.img"
+DISK_SIZE="450M"
+MOUNT_DIR="/tmp/my-rootfs"
+KERNEL_PATH="./linux-6.12.3/arch/x86/boot/bzImage"  # Modifiez selon le chemin de votre noyau
 GRUB_DIR="/usr/lib/grub/i386-pc"
-ROOTKIT_PATH="./rootkit.ko"
-
-########################################
-#              Fonctions               #
-########################################
-
-cleanup() {
-    set +e
-    if mountpoint -q "$ROOTFS_DIR"; then
-        umount "$ROOTFS_DIR"
-    fi
-    if losetup -a | grep -q "$DISK_IMG"; then
-        losetup -d "$(losetup -l | grep "$DISK_IMG" | awk '{print $1}')"
-    fi
-    rm -rf "$ROOTFS_DIR"
-}
-trap cleanup EXIT
-
-########################################
-#      Création de l'image disque      #
-########################################
 
 echo "Création de l'image disque de taille $DISK_SIZE..."
 truncate -s $DISK_SIZE $DISK_IMG
 
+# Étape 1 : Partitionnement de l'image disque
 echo "Partitionnement de l'image disque..."
 parted -s $DISK_IMG mktable msdos
 parted -s $DISK_IMG mkpart primary ext4 1 "100%"
 parted -s $DISK_IMG set 1 boot on
 
+# Étape 2 : Association avec un loop device
 echo "Configuration du loop device..."
-LOOP_DEVICE=$(losetup -Pf --show "$DISK_IMG")
+LOOP_DEVICE=$(losetup -Pf --show $DISK_IMG)
 
+# Étape 3 : Formater la partition en ext4
 echo "Formatage de la partition en ext4..."
 mkfs.ext4 "${LOOP_DEVICE}p1"
 
-echo "Montage de la partition..."
-mkdir -p "$ROOTFS_DIR"
-mount "${LOOP_DEVICE}p1" "$ROOTFS_DIR"
+# Étape 4 : Monter la partition
+echo "Montage de la partition dans $MOUNT_DIR..."
+mkdir -p $MOUNT_DIR
+mount "${LOOP_DEVICE}p1" $MOUNT_DIR
 
-########################################
-#     Installation du système Alpine   #
-########################################
-
+# Étape 5 : Installer Alpine Linux minimal
 echo "Installation d'Alpine Linux minimal dans l'image disque..."
-docker run --rm -v "$ROOTFS_DIR:/my-rootfs" alpine:latest /bin/sh -c '
-    apk add --no-cache openrc bash busybox util-linux grub kmod;
-    mkdir -p /my-rootfs/{dev,proc,run,sys,boot,home,user,root};
-    echo "root:root" | chpasswd;
-    echo "alpine-rootkit" > /etc/hostname;
-    adduser -D user && echo "user:user" | chpasswd;
-    echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers;
+docker run -it --rm -v $MOUNT_DIR:/my-rootfs alpine sh -c '
+  apk add openrc util-linux build-base;
+  ln -s agetty /etc/init.d/agetty.ttyS0;
+  echo ttyS0 > /etc/securetty;
+  rc-update add agetty.ttyS0 default;
+  rc-update add devfs boot;
+  rc-update add procfs boot;
+  rc-update add sysfs boot;
+  rc-update add root default;
 
-    # Copie des fichiers nécessaires explicitement
-    cp -a /bin /my-rootfs/bin;
-    cp -a /sbin /my-rootfs/sbin;
-    cp -a /usr /my-rootfs/usr;
+  # Configurer le compte root
+  echo "root:rootpassword" | chpasswd;
+
+  # Ajouter un compte utilisateur standard
+  adduser -D user;
+  echo "user:userpassword" | chpasswd;
+
+  # Copier les répertoires nécessaires
+  for d in bin etc lib root sbin usr; do tar c "/$d" | tar x -C /my-rootfs; done;
+  for dir in dev proc run sys var; do mkdir /my-rootfs/${dir}; done;
 '
 
-########################################
-# Vérification de `/bin/sh`
-########################################
-
-echo "Vérification de l'existence de /bin/sh..."
-if [ ! -f "$ROOTFS_DIR/bin/sh" ]; then
-    echo "Erreur: /bin/sh est toujours manquant dans l'image disque." >&2
-    exit 1
+# Vérification et ajout du fichier init
+echo "Vérification de l'existence du fichier init..."
+if [ ! -f "$MOUNT_DIR/sbin/init" ]; then
+    echo "Le fichier init est manquant, création d'un lien symbolique vers /bin/busybox..."
+    ln -sf /bin/busybox $MOUNT_DIR/sbin/init
 fi
 
+# Étape 6 : Copier le noyau
+echo "Copie du noyau dans l'image..."
+mkdir -p $MOUNT_DIR/boot
+cp $KERNEL_PATH $MOUNT_DIR/boot/vmlinuz
 
-
-########################################
-#       Copie du noyau et rootkit      #
-########################################
-
-echo "Copie du noyau dans l'image disque..."
-mkdir -p "$ROOTFS_DIR/boot"
-cp "$KERNEL_PATH" "$ROOTFS_DIR/boot/vmlinuz"
-
-echo "Copie du rootkit..."
-mkdir -p "$ROOTFS_DIR/home/user"
-cp "$ROOTKIT_PATH" "$ROOTFS_DIR/home/user/rootkit.ko"
-chmod 700 "$ROOTFS_DIR/home/user/rootkit.ko"
-
-########################################
-#    Configuration de GRUB et init     #
-########################################
-
-echo "Création du lien symbolique /sbin/init vers busybox..."
-ln -sf $ROOTFS_DIR/bin/busybox $ROOTFS_DIR/sbin/init
-
-echo "Configuration des services essentiels..."
-sudo chroot "$ROOTFS_DIR" /my-rootfs/bin/sh -c "
-    rc-update add devfs boot
-    rc-update add procfs boot
-    rc-update add sysfs boot
-    rc-update add root default
-    rc-update add local default
-"
-
-
-echo "Configuration de GRUB..."
-mkdir -p "$ROOTFS_DIR/boot/grub"
-cat <<EOF > "$ROOTFS_DIR/boot/grub/grub.cfg"
+# Étape 7 : Configurer GRUB
+echo "Installation de GRUB..."
+mkdir -p $MOUNT_DIR/boot/grub
+cat <<EOF > $MOUNT_DIR/boot/grub/grub.cfg
 serial
 terminal_input serial
 terminal_output serial
 set root=(hd0,1)
-menuentry "Rootkit Test Environment" {
-    linux /boot/vmlinuz root=/dev/sda1 rw console=ttyS0 init=/sbin/init
+menuentry "Linux2600" {
+    linux /boot/vmlinuz root=/dev/sda1 console=ttyS0 module.sig_enforce=0 init=/sbin/init
 }
 EOF
+grub-install --directory=$GRUB_DIR --boot-directory=$MOUNT_DIR/boot $LOOP_DEVICE
 
-grub-install --directory="$GRUB_DIR" --boot-directory="$ROOTFS_DIR/boot" "$LOOP_DEVICE"
+# Étape 8 : Nettoyage
+echo "Nettoyage..."
+umount $MOUNT_DIR
+losetup -d $LOOP_DEVICE
+rmdir $MOUNT_DIR
 
-echo "Ajout d'un script de démarrage pour le rootkit..."
-mkdir -p $ROOTFS_DIR/etc/local.d
-cat <<'EOF' > "$ROOTFS_DIR/etc/local.d/rootkit.start"
-#!/bin/sh
-insmod /home/user/rootkit.ko
-EOF
-chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
-
-
-########################################
-#          Nettoyage                   #
-########################################
-
-echo "Démontage et finalisation..."
-umount "$ROOTFS_DIR"
-losetup -d "$LOOP_DEVICE"
-rmdir "$ROOTFS_DIR"
-
-########################################
-#         Démarrage de la VM           #
-########################################
-
-echo "Démarrage de l'image disque avec QEMU..."
-qemu-system-x86_64 \
-    -hda "$DISK_IMG" \
-    -nographic \
-    -m 1024 \
-    -net nic -net user
+echo "Création de l'image disque terminée : $DISK_IMG"
