@@ -93,7 +93,7 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 echo "Installation d'Alpine Linux minimal dans le chroot..."
 # Installation des paquets nécessaires directement dans le rootfs via Docker
 docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios build-base;
+    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios;
     echo 'root:root' | chpasswd;
     echo 'alpine-rootkit' > /etc/hostname;
     adduser -D user && echo 'user:user' | chpasswd;
