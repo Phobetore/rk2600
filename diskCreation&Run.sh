@@ -90,18 +90,23 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 #     Installation du système Alpine    #
 ########################################
 
-echo "Installation d'Alpine Linux minimal dans le chroot..."
-# Installation des paquets nécessaires directement dans le rootfs via Docker
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/ash -c "
-    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios;
-    echo 'root:root' | chpasswd;
-    echo 'alpine-rootkit' > /etc/hostname;
-    adduser -D user && echo 'user:user' | chpasswd;
-    echo 'user    ALL=(ALL:ALL) ALL' >> /etc/sudoers;
+echo "Installation d'Alpine Linux minimal dans $ROOTFS_DIR..."
+
+# On va utiliser un conteneur Alpine juste pour avoir apk, puis utiliser --root pour installer directement dans $ROOTFS_DIR.
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
+    # Initialiser un système dans /my-rootfs
+    apk --no-cache --root /my-rootfs --initdb add openrc bash busybox util-linux sudo gcc make kmod grub-bios
+
+    # Configurer le système
+    chroot /my-rootfs /bin/sh -c 'echo root:root | chpasswd'
+    echo 'alpine-rootkit' > /my-rootfs/etc/hostname
+    chroot /my-rootfs adduser -D user
+    echo 'user:user' | chroot /my-rootfs chpasswd
+    echo 'user    ALL=(ALL:ALL) ALL' >> /my-rootfs/etc/sudoers
 "
 
 # Préparation du chroot
-sudo chroot $ROOTFS_DIR /bin/ash -c "
+sudo chroot $ROOTFS_DIR /bin/sh -c "
     mkdir -p /proc /sys /dev /run &&
     mount -t proc none /proc &&
     mount -t sysfs none /sys &&
@@ -121,10 +126,10 @@ sudo cp $BZIMAGE_PATH $ROOTFS_DIR/boot/bzImage
 ########################################
 
 echo "Transfert du rootkit dans le système invité..."
+sudo mkdir -p $ROOTFS_DIR/home/user/rootkit
 sudo cp rootkit.ko $ROOTFS_DIR/home/user/rootkit/
-sudo chown user:user $ROOTFS_DIR/home/user/rootkit/rootkit.ko
-sudo chmod 700 $ROOTFS_DIR/home/user/rootkit/rootkit.ko
-
+sudo chown -R user:user $ROOTFS_DIR/home/user/rootkit
+sudo chmod -R 700 $ROOTFS_DIR/home/user/rootkit
 
 ########################################
 #      Script d'exécution rootkit       #
@@ -133,7 +138,7 @@ sudo chmod 700 $ROOTFS_DIR/home/user/rootkit/rootkit.ko
 echo "Ajout du script d'exécution automatique du rootkit..."
 sudo mkdir -p $ROOTFS_DIR/etc/local.d
 cat <<'EOF' | sudo tee $ROOTFS_DIR/etc/local.d/run_rootkit.start
-#!/bin/ash
+#!/bin/sh
 echo "Insertion du rootkit compilé..."
 cd /home/user/rootkit
 insmod ./rootkit.ko
@@ -142,7 +147,7 @@ EOF
 sudo chmod +x $ROOTFS_DIR/etc/local.d/run_rootkit.start
 
 # Activer le service 'local' au démarrage
-sudo chroot $ROOTFS_DIR /bin/ash -c "
+sudo chroot $ROOTFS_DIR /bin/sh -c "
     rc-update add local default
 "
 
