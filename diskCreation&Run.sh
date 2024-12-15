@@ -42,7 +42,7 @@ fi
 DISK_IMG="2600MinAlpine.img"
 DISK_SIZE="5G"
 ROOTFS_DIR="/tmp/my-rootfs"
-ALPINE_VERSION="v3.18"  # Version d'Alpine Linux à utiliser
+ALPINE_VERSION="latest"  # Version d'Alpine Linux à utiliser
 LOOP_DEVICE=""
 
 cleanup() {
