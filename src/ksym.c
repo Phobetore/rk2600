@@ -9,8 +9,7 @@ static struct kprobe kp = {
 };
 
 int ksym_init(void) {
-    int ret;
-    ret = register_kprobe(&kp);
+    int ret = register_kprobe(&kp);
     if (ret < 0) {
         pr_err("rootkit: failed to register kprobe\n");
         return ret;
@@ -28,5 +27,5 @@ int ksym_init(void) {
 }
 
 void ksym_cleanup(void) {
-    // Nothing special
+    // nothing special
 }
