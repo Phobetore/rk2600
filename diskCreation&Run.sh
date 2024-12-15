@@ -16,7 +16,7 @@ fi
 DISK_IMG="disk.img"
 DISK_SIZE="450M"
 MOUNT_DIR="/tmp/my-rootfs"
-KERNEL_PATH="./linux-6.12.3/arch/x86/boot/bzImage"  # Modifiez selon le chemin de votre noyau
+KERNEL_PATH="../linux-6.12.3/arch/x86/boot/bzImage"  # Modifiez selon le chemin de votre noyau
 GRUB_DIR="/usr/lib/grub/i386-pc"
 
 echo "Création de l'image disque de taille $DISK_SIZE..."
