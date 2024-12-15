@@ -19,7 +19,6 @@ DISK_SIZE="450M"
 MOUNT_DIR="/tmp/my-rootfs"
 KERNEL_PATH="../linux-6.12.3/arch/x86/boot/bzImage"  # Modifiez selon le chemin de votre noyau
 GRUB_DIR="/usr/lib/grub/i386-pc"
-ROOTKIT_PATH="./rootkit.ko"  # Chemin vers le fichier .ko compilé
 
 echo "Création de l'image disque de taille $DISK_SIZE..."
 truncate -s $DISK_SIZE $DISK_IMG
@@ -46,9 +45,10 @@ mount "${LOOP_DEVICE}p1" $MOUNT_DIR
 # Étape 5 : Installer Alpine Linux minimal via conteneur
 echo "Installation d'Alpine Linux minimal dans l'image disque..."
 docker run --rm -v $MOUNT_DIR:/my-rootfs alpine sh -c '
-  apk add openrc util-linux build-base busybox bash grub-bios kmod;
-
-  # Configuration système dans le conteneur
+  # Installer les paquets nécessaires dans le conteneur
+  apk add openrc util-linux build-base
+  
+  # Configuration du système dans le conteneur
   ln -s agetty /etc/init.d/agetty.ttyS0
   echo ttyS0 > /etc/securetty
   rc-update add agetty.ttyS0 default
@@ -58,18 +58,18 @@ docker run --rm -v $MOUNT_DIR:/my-rootfs alpine sh -c '
   rc-update add root default
 
   # Configurer le compte root et utilisateur
-  echo "root:rootpassword" | chpasswd
+  echo "root:root" | chpasswd
   adduser -D user
-  echo "user:userpassword" | chpasswd
+  echo "user:user" | chpasswd
 
-  # Copier les répertoires système essentiels du conteneur vers /my-rootfs
+  # Copier les répertoires essentiels du conteneur vers /my-rootfs
   for d in bin etc lib root sbin usr; do
     tar c "/$d" | tar x -C /my-rootfs
   done
 
   # Créer les répertoires nécessaires dans /my-rootfs
   for dir in dev proc run sys var; do
-    mkdir -p /my-rootfs/${dir}
+    mkdir /my-rootfs/${dir}
   done
 '
 
@@ -85,27 +85,7 @@ echo "Copie du noyau dans l'image..."
 mkdir -p $MOUNT_DIR/boot
 cp $KERNEL_PATH $MOUNT_DIR/boot/vmlinuz
 
-# Étape 7 : Transfert du rootkit
-echo "Transfert du rootkit dans l'image disque..."
-mkdir -p $MOUNT_DIR/home/user/rootkit
-cp $ROOTKIT_PATH $MOUNT_DIR/home/user/rootkit/
-chown 1000:1000 $MOUNT_DIR/home/user/rootkit/rootkit.ko
-chmod 700 $MOUNT_DIR/home/user/rootkit/rootkit.ko
-
-# Étape 8 : Script d’exécution automatique du rootkit
-echo "Ajout du script d'exécution automatique pour le rootkit..."
-mkdir -p $MOUNT_DIR/etc/local.d
-cat <<EOF > $MOUNT_DIR/etc/local.d/load_rootkit.start
-#!/bin/sh
-echo "Chargement automatique du rootkit au démarrage..."
-insmod /home/user/rootkit/rootkit.ko
-EOF
-chmod +x $MOUNT_DIR/etc/local.d/load_rootkit.start
-
-# Activer le service local
-chroot $MOUNT_DIR rc-update add local default
-
-# Étape 9 : Configurer GRUB
+# Étape 7 : Configurer GRUB
 echo "Installation de GRUB..."
 mkdir -p $MOUNT_DIR/boot/grub
 cat <<EOF > $MOUNT_DIR/boot/grub/grub.cfg
@@ -119,7 +99,7 @@ menuentry "Linux2600" {
 EOF
 grub-install --directory=$GRUB_DIR --boot-directory=$MOUNT_DIR/boot $LOOP_DEVICE
 
-# Étape 10 : Nettoyage
+# Étape 8 : Nettoyage
 echo "Nettoyage..."
 umount $MOUNT_DIR
 losetup -d $LOOP_DEVICE
