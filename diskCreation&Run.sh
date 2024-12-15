@@ -121,9 +121,10 @@ sudo cp $BZIMAGE_PATH $ROOTFS_DIR/boot/bzImage
 ########################################
 
 echo "Transfert du rootkit dans le système invité..."
-sudo cp -r $ROOTKIT_DIR $ROOTFS_DIR/home/user/rootkit
-sudo chown -R user:user $ROOTFS_DIR/home/user/rootkit
-sudo chmod -R 700 $ROOTFS_DIR/home/user/rootkit
+sudo cp rootkit.ko $ROOTFS_DIR/home/user/rootkit/
+sudo chown user:user $ROOTFS_DIR/home/user/rootkit/rootkit.ko
+sudo chmod 700 $ROOTFS_DIR/home/user/rootkit/rootkit.ko
+
 
 ########################################
 #      Script d'exécution rootkit       #
@@ -133,9 +134,8 @@ echo "Ajout du script d'exécution automatique du rootkit..."
 sudo mkdir -p $ROOTFS_DIR/etc/local.d
 cat <<'EOF' | sudo tee $ROOTFS_DIR/etc/local.d/run_rootkit.start
 #!/bin/sh
-echo "Compilation et exécution automatique du rootkit..."
+echo "Insertion du rootkit compilé..."
 cd /home/user/rootkit
-make clean && make
 insmod ./rootkit.ko
 EOF
 
