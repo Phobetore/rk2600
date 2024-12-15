@@ -22,7 +22,9 @@ static LIST_HEAD(hidden_files);
 void hide_add_file(const char *filename) {
     struct hidden_file *hf = kmalloc(sizeof(*hf), GFP_KERNEL);
     if (!hf) return;
-    strlcpy(hf->name, filename, sizeof(hf->name));
+    strncpy(hf->name, filename, sizeof(hf->name) - 1);
+    hf->name[sizeof(hf->name) - 1] = '\0';
+
     list_add(&hf->list, &hidden_files);
 }
 
