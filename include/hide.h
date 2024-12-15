@@ -23,5 +23,6 @@ int install_hook(struct ftrace_hook *hook);
 void remove_hook(struct ftrace_hook *hook);
 int install_hooks(struct ftrace_hook *hooks, size_t count);
 void remove_hooks(struct ftrace_hook *hooks, size_t count);
+int init_hide(void);
 
 #endif
