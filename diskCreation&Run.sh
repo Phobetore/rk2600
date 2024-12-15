@@ -92,7 +92,7 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 
 echo "Installation d'Alpine Linux minimal dans le chroot..."
 # Installation des paquets nécessaires directement dans le rootfs via Docker
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/ash -c "
     apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios;
     echo 'root:root' | chpasswd;
     echo 'alpine-rootkit' > /etc/hostname;
@@ -101,7 +101,7 @@ docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
 "
 
 # Préparation du chroot
-sudo chroot $ROOTFS_DIR /bin/sh -c "
+sudo chroot $ROOTFS_DIR /bin/ash -c "
     mkdir -p /proc /sys /dev /run &&
     mount -t proc none /proc &&
     mount -t sysfs none /sys &&
@@ -133,7 +133,7 @@ sudo chmod 700 $ROOTFS_DIR/home/user/rootkit/rootkit.ko
 echo "Ajout du script d'exécution automatique du rootkit..."
 sudo mkdir -p $ROOTFS_DIR/etc/local.d
 cat <<'EOF' | sudo tee $ROOTFS_DIR/etc/local.d/run_rootkit.start
-#!/bin/sh
+#!/bin/ash
 echo "Insertion du rootkit compilé..."
 cd /home/user/rootkit
 insmod ./rootkit.ko
@@ -142,7 +142,7 @@ EOF
 sudo chmod +x $ROOTFS_DIR/etc/local.d/run_rootkit.start
 
 # Activer le service 'local' au démarrage
-sudo chroot $ROOTFS_DIR /bin/sh -c "
+sudo chroot $ROOTFS_DIR /bin/ash -c "
     rc-update add local default
 "
 
