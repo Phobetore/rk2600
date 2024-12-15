@@ -85,11 +85,6 @@ docker run --rm -v "$ROOTFS_DIR:/my-rootfs" alpine:latest /bin/sh -c '
     cp -a /bin /my-rootfs/bin;
     cp -a /sbin /my-rootfs/sbin;
     cp -a /usr /my-rootfs/usr;
-    rc-update add devfs boot
-    rc-update add procfs boot
-    rc-update add sysfs boot
-    rc-update add root default
-    rc-update add local default
 '
 
 ########################################
@@ -123,6 +118,16 @@ chmod 700 "$ROOTFS_DIR/home/user/rootkit.ko"
 
 echo "Création du lien symbolique /sbin/init vers busybox..."
 ln -sf $ROOTFS_DIR/bin/busybox $ROOTFS_DIR/sbin/init
+
+echo "Configuration des services essentiels..."
+sudo chroot "$ROOTFS_DIR" /my-rootfs/bin/sh -c "
+    rc-update add devfs boot
+    rc-update add procfs boot
+    rc-update add sysfs boot
+    rc-update add root default
+    rc-update add local default
+"
+
 
 echo "Configuration de GRUB..."
 mkdir -p "$ROOTFS_DIR/boot/grub"
