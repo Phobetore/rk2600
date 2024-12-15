@@ -90,22 +90,39 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 #     Installation du système Alpine    #
 ########################################
 
-echo "Installation d'Alpine Linux minimal dans le chroot..."
-# Installation des paquets nécessaires directement dans le rootfs via Docker
+# Étape 1 : Configuration et installation des paquets dans l'environnement Docker
 docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios;
+    set -e
+    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios build-base;
+    ln -sf /bin/busybox /bin/sh; # Assure que /bin/sh est disponible
     echo 'root:root' | chpasswd;
     echo 'alpine-rootkit' > /etc/hostname;
     adduser -D user && echo 'user:user' | chpasswd;
     echo 'user    ALL=(ALL:ALL) ALL' >> /etc/sudoers;
+    
+    # Préparation des fichiers et répertoires nécessaires
+    for dir in dev proc run sys var; do mkdir -p /my-rootfs/\$dir; done;
+    for d in bin etc lib lib64 root sbin usr var; do tar c \"/\$d\" | tar x -C /my-rootfs; done;
 "
 
-# Préparation du chroot
+echo "Installation terminée dans $ROOTFS_DIR."
+
+# Étape 2 : Préparation des montages nécessaires
+echo "Configuration des montages pour le chroot..."
+sudo mount -t proc none $ROOTFS_DIR/proc
+sudo mount -t sysfs none $ROOTFS_DIR/sys
+sudo mount --bind /dev $ROOTFS_DIR/dev
+sudo mount --bind /run $ROOTFS_DIR/run
+
+# Étape 3 : Chroot dans l'environnement Alpine
+echo "Entrée dans l'environnement chroot..."
 sudo chroot $ROOTFS_DIR /bin/sh -c "
-    mkdir -p /proc /sys /dev /run &&
-    mount -t proc none /proc &&
-    mount -t sysfs none /sys &&
-    echo 'Configuration utilisateur terminée.'
+    set -e
+    echo 'Bienvenue dans le chroot Alpine !';
+    mkdir -p /proc /sys /dev /run;
+    mount -t proc none /proc;
+    mount -t sysfs none /sys;
+    echo 'Configuration utilisateur terminée.';
 "
 
 ########################################
