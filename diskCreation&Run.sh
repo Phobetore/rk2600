@@ -90,48 +90,23 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 #     Installation du système Alpine    #
 ########################################
 
-echo "Installation d'Alpine Linux minimal dans $ROOTFS_DIR..."
+echo "Installation d'Alpine Linux minimal dans le chroot..."
+# Installation des paquets nécessaires directement dans le rootfs via Docker
+docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/ash -c "
+    apk add --no-cache openrc bash busybox util-linux sudo gcc make kmod grub-bios build-base;
+    echo 'root:root' | chpasswd;
+    echo 'alpine-rootkit' > /etc/hostname;
+    adduser -D user && echo 'user:user' | chpasswd;
+    echo 'user    ALL=(ALL:ALL) ALL' >> /etc/sudoers;
+"
 
-docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c '
-    # Initialiser la base de données apk dans /my-rootfs
-    apk --root /my-rootfs --initdb
-
-    # Créer le répertoire des clés et copier les clés du conteneur
-    mkdir -p /my-rootfs/etc/apk
-    cp -r /etc/apk/keys /my-rootfs/etc/apk/
-
-    # Configurer le dépôt Alpine (vous pouvez adapter la version/stable)
-    echo "http://dl-cdn.alpinelinux.org/alpine/latest-stable/main" > /my-rootfs/etc/apk/repositories
-    echo "http://dl-cdn.alpinelinux.org/alpine/latest-stable/community" >> /my-rootfs/etc/apk/repositories
-
-    # Maintenant que les dépôts et les clés sont en place, installer busybox et autres paquets
-    apk --no-cache --root /my-rootfs add busybox bash openrc util-linux sudo gcc make kmod grub-bios
-
-    # Vérifier que /my-rootfs/bin/sh existe maintenant
-    if [ ! -x /my-rootfs/bin/sh ]; then
-        echo "/bin/sh absent après installation busybox."
-        exit 1
-    fi
-
-    # Configurer le système
-    echo "root:root" | chroot /my-rootfs chpasswd
-    echo "alpine-rootkit" > /my-rootfs/etc/hostname
-    chroot /my-rootfs adduser -D user
-    echo "user:user" | chroot /my-rootfs chpasswd
-    echo "user    ALL=(ALL:ALL) ALL" >> /my-rootfs/etc/sudoers
-
-    # Créer les répertoires nécessaires
-    for dir in dev proc run sys var; do mkdir -p /my-rootfs/$dir; done
-'
-
-# Préparation du chroot sur la machine hôte
-sudo chroot $ROOTFS_DIR /bin/sh -c "
+# Préparation du chroot
+sudo chroot $ROOTFS_DIR /bin/ash -c "
     mkdir -p /proc /sys /dev /run &&
     mount -t proc none /proc &&
     mount -t sysfs none /sys &&
     echo 'Configuration utilisateur terminée.'
 "
-
 
 ########################################
 #           Configuration Noyau         #
