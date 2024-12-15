@@ -47,17 +47,19 @@ mount "${LOOP_DEVICE}p1" $MOUNT_DIR
 echo "Installation d'Alpine Linux minimal dans l'image disque..."
 docker run --rm -v "$MOUNT_DIR:/my-rootfs" alpine:latest /bin/sh -c '
     apk add --no-cache openrc bash busybox util-linux grub kmod;
-    mkdir -p /my-rootfs/{dev,proc,run,sys,boot,home,user,root};
+    mkdir -p /my-rootfs/{dev,proc,run,sys,boot,home,user,root,sbin};
+    cp /bin/busybox /my-rootfs/bin/;
+    ln -sf /bin/busybox /my-rootfs/sbin/init;
     echo "root:root" | chpasswd;
     echo "alpine-rootkit" > /etc/hostname;
     adduser -D user && echo "user:user" | chpasswd;
     echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers;
-    rc-update add local default;
     rc-update add devfs boot;
     rc-update add procfs boot;
     rc-update add sysfs boot;
     rc-update add mdev sysinit;
 '
+
 
 # Vérification de /bin/sh
 echo "Vérification de l'existence de /bin/sh..."
