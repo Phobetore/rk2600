@@ -85,6 +85,7 @@ docker run --rm -v "$ROOTFS_DIR:/my-rootfs" alpine:latest /bin/sh -c '
     cp -a /bin /my-rootfs/bin;
     cp -a /sbin /my-rootfs/sbin;
     cp -a /usr /my-rootfs/usr;
+    rc-update add local default
 '
 
 ########################################
@@ -138,9 +139,6 @@ insmod /home/user/rootkit.ko
 EOF
 chmod +x "$ROOTFS_DIR/etc/local.d/rootkit.start"
 
-sudo chroot "$ROOTFS_DIR" "/bin/sh" -c "
-    rc-update add local default
-"
 ########################################
 #          Nettoyage                   #
 ########################################
