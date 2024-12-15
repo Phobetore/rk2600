@@ -93,24 +93,23 @@ sudo mount -o rw ${LOOP_DEVICE}p1 $ROOTFS_DIR
 echo "Installation d'Alpine Linux minimal dans $ROOTFS_DIR..."
 
 docker run --rm -v $ROOTFS_DIR:/my-rootfs alpine:$ALPINE_VERSION /bin/sh -c "
-    # Initialiser le système racine dans /my-rootfs
-    apk --no-cache --root /my-rootfs --initdb add busybox
+    # Mettre à jour l'index des paquets dans le système racine
+    apk --no-cache --root /my-rootfs --initdb add alpine-base || {
+        echo 'Erreur lors de l’installation des paquets de base';
+        exit 1;
+    }
 
-    # busybox fournit /bin/sh, vérifions qu'il existe
-    if [ ! -x /my-rootfs/bin/sh ]; then
-        echo '/bin/sh absent après installation busybox.'
-        exit 1
-    fi
+    # Installer les paquets nécessaires
+    apk --no-cache --root /my-rootfs add bash openrc util-linux sudo gcc make kmod grub-bios || {
+        echo 'Erreur lors de l’installation des paquets supplémentaires';
+        exit 1;
+    }
 
-    # Installer d'autres paquets nécessaires
-    # Note: Pas besoin de '--initdb' cette fois car c'est déjà fait.
-    apk --no-cache --root /my-rootfs add bash openrc util-linux sudo gcc make kmod grub-bios
-
-    # Maintenant que le système de base est prêt, on peut configurer
+    # Configuration utilisateur
     echo 'root:root' | chroot /my-rootfs chpasswd
     echo 'alpine-rootkit' > /my-rootfs/etc/hostname
 
-    # Créer l'utilisateur user
+    # Créer un utilisateur standard
     chroot /my-rootfs adduser -D user
     echo 'user:user' | chroot /my-rootfs chpasswd
     echo 'user    ALL=(ALL:ALL) ALL' >> /my-rootfs/etc/sudoers
