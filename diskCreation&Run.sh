@@ -58,6 +58,7 @@ docker run --rm -v "$MOUNT_DIR:/my-rootfs" alpine:latest /bin/sh -c '
     rc-update add procfs boot;
     rc-update add sysfs boot;
     rc-update add mdev sysinit;
+    rc-update add local default;
 '
 
 
