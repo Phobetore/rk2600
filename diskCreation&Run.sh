@@ -121,3 +121,15 @@ losetup -d $LOOP_DEVICE
 rmdir $MOUNT_DIR
 
 echo "Création de l'image disque terminée : $DISK_IMG"
+
+########################################
+#        Démarrage de la VM QEMU        #
+########################################
+
+echo "Démarrage de l'image avec QEMU..."
+qemu-system-x86_64 \
+    -hda $DISK_IMG \
+    -nographic \
+    -enable-kvm \
+    -m 1024 \
+    -net nic -net user
