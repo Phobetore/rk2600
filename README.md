@@ -122,6 +122,3 @@ menuentry "Linux2600" {
 - Ce projet est à but éducatif uniquement. Ne l'utilisez pas sur des systèmes en production ou sans autorisation.
 - Manipuler des rootkits peut entraîner des risques pour la sécurité et la stabilité du système. Soyez prudent.
 
-## Auteur
-
-Ce projet a été créé pour démontrer l'infection d'un environnement Linux minimal avec un rootkit dans le cadre d'un cours de sécurité informatique.
